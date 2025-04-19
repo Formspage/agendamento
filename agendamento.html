@@ -6,9 +6,6 @@
   <title>Tabela de Agendamento</title>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
   <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
-  <!-- Incluindo o Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
   <style>
     body {
       font-family: 'Arial', sans-serif;
@@ -151,9 +148,9 @@
         </thead>
         <tbody>
           <tr>
-            <td></td>
-            <td></td>
-            <td></td>
+            <td contenteditable="true"></td>
+            <td contenteditable="true"></td>
+            <td contenteditable="true"></td>
             <td><input type="date"></td>
           </tr>
         </tbody>
@@ -172,8 +169,11 @@
     <button class="back-btn" onclick="voltar()"><i class="fas fa-arrow-left"></i> Voltar</button>
   </div>
 
-  <script>
-    // Configuração do Firebase
+  <!-- Firebase -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
+
     const firebaseConfig = {
       apiKey: "AIzaSyDLf0rKSgfMD956cGGgSIsv56Vbq_FZ3_w",
       authDomain: "agendamentoatlas-be540.firebaseapp.com",
@@ -184,26 +184,36 @@
       appId: "1:126424910599:web:bd9deb2ea0294819ab13a2"
     };
 
-    // Inicializando o Firebase
-    firebase.initializeApp(firebaseConfig);
-    const database = firebase.database();
-    const tabelaRef = database.ref('agendamentos');
+    const app = initializeApp(firebaseConfig);
+    const database = getDatabase(app);
+    const tabelaRef = ref(database, "tabelaAgendamento");
 
-    // Carrega os dados da tabela ao iniciar
-    tabelaRef.on('value', function(snapshot) {
+    function salvarTabela() {
+      const linhas = Array.from(document.querySelectorAll('#tabela tbody tr'));
+      const dados = linhas.map(tr => {
+        const tds = tr.querySelectorAll('td');
+        return [
+          tds[0].textContent.trim(),
+          tds[1].textContent.trim(),
+          tds[2].textContent.trim(),
+          tds[3].querySelector('input')?.value || ''
+        ];
+      }).filter(linha => linha.some(valor => valor !== ''));
+      set(tabelaRef, dados);
+    }
+
+    onValue(tabelaRef, snapshot => {
       const dados = snapshot.val();
       const tbody = document.querySelector('#tabela tbody');
-      tbody.innerHTML = ''; // Limpa a tabela antes de preencher com novos dados
+      tbody.innerHTML = '';
 
       if (dados) {
-        // A estrutura dos dados no Firebase pode ser um objeto com chaves
-        // como '0', '1', '2' ou algo semelhante. Vamos usar 'Object.values()'
-        // para pegar os valores e preenchê-los na tabela.
-        Object.values(dados).forEach(linha => {
+        dados.forEach(linha => {
           const tr = document.createElement('tr');
           linha.forEach((valor, i) => {
             const td = document.createElement('td');
             td.style.textAlign = 'center';
+
             if (i === 3) {
               const input = document.createElement('input');
               input.type = 'date';
@@ -211,42 +221,39 @@
               input.addEventListener('change', salvarTabela);
               td.appendChild(input);
             } else {
+              td.contentEditable = true;
               td.textContent = valor || '';
+              td.addEventListener('input', salvarTabela);
             }
+
             tr.appendChild(td);
           });
           tbody.appendChild(tr);
         });
+      } else {
+        // Se estiver vazio, cria linha inicial
+        const tr = document.createElement('tr');
+        for (let i = 0; i < 4; i++) {
+          const td = document.createElement('td');
+          if (i === 3) {
+            const input = document.createElement('input');
+            input.type = 'date';
+            input.addEventListener('change', salvarTabela);
+            td.appendChild(input);
+          } else {
+            td.contentEditable = true;
+            td.addEventListener('input', salvarTabela);
+          }
+          tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
       }
     });
 
-    // Função para salvar os dados da tabela no Firebase
-    function salvarTabela() {
-      const tabela = document.getElementById('tabela');
-      const linhas = tabela.querySelectorAll('tbody tr');
-      const dados = [];
+    window.salvarTabela = salvarTabela;
+  </script>
 
-      linhas.forEach(tr => {
-        const linha = [];
-        const tds = tr.querySelectorAll('td');
-        tds.forEach((td, index) => {
-          if (index === 3) {
-            const input = td.querySelector('input');
-            linha.push(input ? input.value : '');
-          } else {
-            linha.push(td.textContent.trim());
-          }
-        });
-        if (linha.some(coluna => coluna !== '')) {
-          dados.push(linha);
-        }
-      });
-
-      // Atualiza os dados no Firebase
-      tabelaRef.set(dados);
-    }
-
-    // Função para exportar a tabela para Excel
+  <script>
     function exportarExcel() {
       const tabela = document.getElementById('tabela');
       const wb = XLSX.utils.book_new();
@@ -264,7 +271,7 @@
             linha.push(td.textContent.trim());
           }
         });
-        if (linha[3]) { // Adiciona a linha somente se tiver data
+        if (linha[3]) {
           dados.push(linha);
         }
       });
@@ -281,7 +288,6 @@
       }
     }
 
-    // Função para importar dados de Excel
     function importarExcel(event) {
       const arquivo = event.target.files[0];
       const leitor = new FileReader();
@@ -293,9 +299,8 @@
 
         if (linhas.length > 1) {
           const tbody = document.querySelector('#tabela tbody');
-          tbody.innerHTML = ''; // Limpa a tabela
+          tbody.innerHTML = '';
 
-          // Para cada linha no Excel, cria um tr e insere as colunas
           for (let i = 1; i < linhas.length; i++) {
             const tr = document.createElement('tr');
             for (let j = 0; j < 4; j++) {
@@ -305,28 +310,27 @@
                 const input = document.createElement('input');
                 input.type = 'date';
                 input.value = linhas[i][j] || '';
-                input.style.textAlign = 'center';
+                input.addEventListener('change', salvarTabela);
                 td.appendChild(input);
               } else {
+                td.contentEditable = true;
                 td.textContent = linhas[i][j] || '';
+                td.addEventListener('input', salvarTabela);
               }
               tr.appendChild(td);
             }
             tbody.appendChild(tr);
           }
 
-          // Salva os dados do Excel no Firebase
-          salvarTabela();
+          salvarTabela(); // salva os dados importados
         }
       };
       leitor.readAsArrayBuffer(arquivo);
     }
 
-    // Função para voltar para a página inicial
     function voltar() {
       window.location.href = "index.html";
     }
   </script>
-
 </body>
 </html>
