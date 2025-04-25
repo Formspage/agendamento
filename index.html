@@ -1,148 +1,232 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Agendamento de Entregas</title>
-
-<!-- Ícones modernos com Font Awesome -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-
-<style>
-:root {
---primary: #4f46e5;
---primary-hover: #4338ca;
---background: linear-gradient(135deg, #eef2ff, #f0f0ff);
---white: #ffffff;
---text-dark: #333;
---text-light: #666;
---yellow: #facc15;
---yellow-hover: #eab308;
-}
-
-* {
-box-sizing: border-box;
-padding: 0;
-margin: 0;
-}
-
-body {
-font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-background: var(--background);
-display: flex;
-justify-content: center;
-align-items: center;
-min-height: 100vh;
-color: var(--text-dark);
-}
-
-.container {
-background: var(--white);
-padding: 40px 30px;
-border-radius: 16px;
-box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-width: 100%;
-max-width: 480px;
-text-align: center;
-transition: transform 0.3s ease;
-}
-
-.container:hover {
-transform: scale(1.02);
-}
-
-h1 {
-font-size: 26px;
-color: var(--primary);
-margin-bottom: 10px;
-}
-
-p {
-font-size: 15px;
-color: var(--text-light);
-margin-bottom: 30px;
-}
-
-.form-group {
-display: flex;
-flex-direction: column;
-align-items: center;
-}
-
-.form-group i {
-font-size: 18px;
-margin-bottom: 5px;
-color: var(--primary);
-}
-
-input[type="text"] {
-width: 100%;
-max-width: 360px;
-padding: 12px;
-margin-bottom: 20px;
-border: 1px solid #ddd;
-border-radius: 8px;
-font-size: 16px;
-text-align: center;
-transition: border-color 0.2s ease;
-}
-
-input[type="text"]:focus {
-outline: none;
-border-color: var(--primary);
-}
-
-input[type="submit"] {
-width: 100%;
-max-width: 360px;
-padding: 14px;
-background: var(--yellow);
-border: none;
-border-radius: 8px;
-font-size: 17px;
-color: var(--text-dark);
-font-weight: bold;
-cursor: pointer;
-transition: background-color 0.3s ease, transform 0.2s;
-}
-
-input[type="submit"]:hover {
-background-color: var(--yellow-hover);
-transform: scale(1.02);
-}
-
-.footer {
-margin-top: 30px;
-font-size: 13px;
-color: #999;
-}
-
-@media (max-width: 500px) {
-.container {
-padding: 30px 20px;
-}
-
-input[type="submit"], input[type="text"] {
-font-size: 16px;
-}
-}
-</style>
+  <meta charset="UTF-8">
+  <title>Login de Acesso</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 50px;
+    }
+    input {
+      padding: 10px;
+      font-size: 16px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin-top: 10px;
+    }
+    #mainContent {
+      display: none;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    .admin-buttons {
+      display: none;
+    }
+  </style>
 </head>
-
 <body>
-<div class="container">
-<h1><i class="fas fa-truck"></i> Agendamento de Entregas</h1>
-<p>Informe o código da entrega para acessar o cronograma.</p>
+  <div id="loginScreen">
+    <h2>Digite o código do Vendor</h2>
+    <input type="text" id="vendorCodeLogin" placeholder="Código do Vendor">
+    <br>
+    <button onclick="enterSystem()">Entrar</button>
+  </div>
 
-<form class="form-group" action="agendamento.html" method="GET">
-<i class="fas fa-barcode"></i>
-<input type="text" name="codigo" placeholder="Digite o código da entrega" required>
-<input type="submit" value="Entrar">
-</form>
+  <div id="mainContent">
+    <h2>Tabela de Dados</h2>
+    <div class="admin-buttons" id="adminButtons">
+      <input type="file" id="inputExcel" accept=".xlsx" onchange="handleFile(event)">
+      <button onclick="exportToExcel()">Exportar para Excel</button>
+    </div>
+    <button onclick="backToLogin()">Voltar</button>
+    <br><br>
 
-<div class="footer">
-© 2025 Sistema de Agendamento
-</div>
-</div>
+    <table id="dataTable">
+      <thead>
+        <tr>
+          <th>Purchasing Document</th>
+          <th>Item</th>
+          <th>Material</th>
+          <th>Description</th>
+          <th>Document Date</th>
+          <th>Vendor</th>
+          <th>Vendor Name</th>
+          <th>Order Qty To Be Delivered</th>
+          <th>Requested Ship Date</th>
+          <th>Last Promise Delivery Date</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+    import { getDatabase, ref, set, update, onValue, get, child } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDLf0rKSgfMD956cGGgSIsv56Vbq_FZ3_w",
+      authDomain: "agendamentoatlas-be540.firebaseapp.com",
+      databaseURL: "https://agendamentoatlas-be540-default-rtdb.firebaseio.com",
+      projectId: "agendamentoatlas-be540",
+      storageBucket: "agendamentoatlas-be540.appspot.com",
+      messagingSenderId: "126424910599",
+      appId: "1:126424910599:web:bd9deb2ea0294819ab13a2"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const table = document.querySelector("#dataTable tbody");
+    const adminButtons = document.getElementById("adminButtons");
+    let vendorCode = "";
+
+    function getRowKey(rowData) {
+      return `${rowData[0]}_${rowData[1]}`;
+    }
+
+    function formatExcelDate(value) {
+      if (typeof value === 'number') {
+        const date = new Date((value - 25569) * 86400 * 1000);
+        return date.toISOString().split('T')[0];
+      }
+      return value || '';
+    }
+
+    function formatExportDate(dateStr) {
+      if (!dateStr) return '';
+      const [year, month, day] = dateStr.split('-');
+      return `${day}.${month}.${year}`;
+    }
+
+    function loadFromFirebase() {
+      onValue(ref(db, "tabela"), (snapshot) => {
+        const data = snapshot.val();
+        table.innerHTML = '';
+        for (const key in data) {
+          const rowData = data[key];
+          if (!vendorCode || rowData.vendor === vendorCode || vendorCode === "atlas2025") {
+            const row = table.insertRow();
+            const values = [
+              rowData.purchasingDocument,
+              rowData.item,
+              rowData.material,
+              rowData.description,
+              rowData.documentDate,
+              rowData.vendor,
+              rowData.vendorName,
+              rowData.orderQtyToBeDelivered,
+              rowData.requestedShipDate
+            ];
+            for (let i = 0; i < values.length; i++) {
+              const cell = row.insertCell();
+              cell.textContent = values[i] || '';
+            }
+            const inputCell = row.insertCell();
+            const input = document.createElement("input");
+            input.type = "date";
+            input.value = rowData.lastPromiseDeliveryDate || '';
+            input.addEventListener("change", () => {
+              update(ref(db, "tabela/" + key), {
+                lastPromiseDeliveryDate: input.value
+              });
+            });
+            inputCell.appendChild(input);
+          }
+        }
+      });
+    }
+
+    window.enterSystem = function () {
+      vendorCode = document.getElementById("vendorCodeLogin").value.trim();
+      if (!vendorCode) return;
+
+      get(ref(db, 'tabela')).then(snapshot => {
+        const data = snapshot.val();
+        const values = Object.values(data || {});
+        const vendorExists = vendorCode === "atlas2025" || values.some(row => row.vendor === vendorCode);
+
+        if (!vendorExists) {
+          alert("Código inválido. Tente novamente.");
+          return;
+        }
+
+        document.getElementById("loginScreen").style.display = "none";
+        document.getElementById("mainContent").style.display = "block";
+        adminButtons.style.display = vendorCode === "atlas2025" ? "block" : "none";
+
+        loadFromFirebase();
+      });
+    };
+
+    window.backToLogin = function () {
+      document.getElementById("mainContent").style.display = "none";
+      document.getElementById("loginScreen").style.display = "block";
+      document.getElementById("vendorCodeLogin").value = "";
+      table.innerHTML = "";
+    };
+
+    window.handleFile = function (e) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+        const updates = {};
+        for (let i = 1; i < json.length; i++) {
+          const row = json[i];
+          const key = getRowKey(row);
+          updates[key] = {
+            purchasingDocument: row[0] || '',
+            item: row[1] || '',
+            material: row[2] || '',
+            description: row[3] || '',
+            documentDate: formatExcelDate(row[4]),
+            vendor: row[5] || '',
+            vendorName: row[6] || '',
+            orderQtyToBeDelivered: row[7] || '',
+            requestedShipDate: formatExcelDate(row[8]),
+            lastPromiseDeliveryDate: formatExcelDate(row[9])
+          };
+        }
+        set(ref(db, "tabela"), updates).then(() => loadFromFirebase());
+      };
+      reader.readAsArrayBuffer(file);
+    };
+
+    window.exportToExcel = function () {
+      const wb = XLSX.utils.book_new();
+      const rows = [[...document.querySelectorAll("thead th")].map(th => th.textContent)];
+      for (const tr of document.querySelectorAll("tbody tr")) {
+        const row = [];
+        for (let i = 0; i < 9; i++) {
+          row.push(tr.cells[i].textContent);
+        }
+        const dateValue = tr.cells[9].querySelector("input").value;
+        row.push(formatExportDate(dateValue));
+        rows.push(row);
+      }
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      XLSX.utils.book_append_sheet(wb, ws, "Dados");
+      XLSX.writeFile(wb, "tabela.xlsx");
+    };
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </body>
 </html>
