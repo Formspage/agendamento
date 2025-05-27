@@ -1,59 +1,72 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
-  <meta charset="UTF-8">
-  <title>Login de Acesso</title>
+  <meta charset="UTF-8" />
+  <title>Login e Tabela de Vendor</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       text-align: center;
-      padding: 50px;
+      padding: 30px;
+      max-width: 1000px;
+      margin: auto;
     }
-    input {
+
+    input,
+    button {
       padding: 10px;
       font-size: 16px;
+      margin: 5px 0;
     }
-    button {
-      padding: 10px 20px;
-      font-size: 16px;
-      margin-top: 10px;
-    }
+
     #mainContent {
       display: none;
     }
+
     table {
       border-collapse: collapse;
       width: 100%;
+      margin-top: 15px;
     }
-    th, td {
+
+    th,
+    td {
       border: 1px solid #ddd;
       padding: 8px;
       text-align: left;
+      max-width: 150px;
+      overflow-wrap: break-word;
     }
+
     th {
-      background-color: #f2f2f2;
+      background-color: #F2F2F2;
     }
+
     .admin-buttons {
-      display: none;
+      margin-bottom: 15px;
     }
   </style>
 </head>
+
 <body>
+
   <div id="loginScreen">
     <h2>Digite o código do Vendor</h2>
-    <input type="text" id="vendorCodeLogin" placeholder="Código do Vendor">
-    <br>
+    <input type="text" id="vendorCodeLogin" placeholder="Código do Vendor" />
+    <br />
     <button onclick="enterSystem()">Entrar</button>
   </div>
 
   <div id="mainContent">
     <h2>Tabela de Dados</h2>
-    <div class="admin-buttons" id="adminButtons">
-      <input type="file" id="inputExcel" accept=".xlsx" onchange="handleFile(event)">
+
+    <div class="admin-buttons" id="adminButtons" style="display:none;">
+      <input type="file" id="inputExcel" accept=".xlsx" />
       <button onclick="exportToExcel()">Exportar para Excel</button>
     </div>
+
     <button onclick="backToLogin()">Voltar</button>
-    <br><br>
 
     <table id="dataTable">
       <thead>
@@ -74,159 +87,228 @@
     </table>
   </div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
-    import { getDatabase, ref, set, update, onValue, get, child } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyDLf0rKSgfMD956cGGgSIsv56Vbq_FZ3_w",
-      authDomain: "agendamentoatlas-be540.firebaseapp.com",
-      databaseURL: "https://agendamentoatlas-be540-default-rtdb.firebaseio.com",
-      projectId: "agendamentoatlas-be540",
-      storageBucket: "agendamentoatlas-be540.appspot.com",
-      messagingSenderId: "126424910599",
-      appId: "1:126424910599:web:bd9deb2ea0294819ab13a2"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-    const table = document.querySelector("#dataTable tbody");
-    const adminButtons = document.getElementById("adminButtons");
-    let vendorCode = "";
-
-    function getRowKey(rowData) {
-      return `${rowData[0]}_${rowData[1]}`;
-    }
-
-    function formatExcelDate(value) {
-      if (typeof value === 'number') {
-        const date = new Date((value - 25569) * 86400 * 1000);
-        return date.toISOString().split('T')[0];
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script>
+    // Dados fixos JSON para exemplo — você pode substituir por fetch() para dados externos
+    let tabelaDados = [
+      {
+        "purchasingDocument": "4500001234",
+        "item": "10",
+        "material": "MAT-001",
+        "description": "Material Exemplo A",
+        "documentDate": "2025-05-01",
+        "vendor": "VEND001",
+        "vendorName": "Fornecedor A",
+        "orderQtyToBeDelivered": "100",
+        "requestedShipDate": "2025-05-15",
+        "lastPromiseDeliveryDate": "2025-05-14"
+      },
+      {
+        "purchasingDocument": "4500005678",
+        "item": "20",
+        "material": "MAT-002",
+        "description": "Material Exemplo B",
+        "documentDate": "2025-05-03",
+        "vendor": "VEND002",
+        "vendorName": "Fornecedor B",
+        "orderQtyToBeDelivered": "50",
+        "requestedShipDate": "2025-05-20",
+        "lastPromiseDeliveryDate": ""
+      },
+      {
+        "purchasingDocument": "4500009999",
+        "item": "30",
+        "material": "MAT-003",
+        "description": "Material Exemplo C",
+        "documentDate": "2025-05-05",
+        "vendor": "atlas2025",
+        "vendorName": "Fornecedor Admin",
+        "orderQtyToBeDelivered": "200",
+        "requestedShipDate": "2025-05-22",
+        "lastPromiseDeliveryDate": "2025-05-21"
       }
-      return value || '';
-    }
+    ];
 
-    function formatExportDate(dateStr) {
-      if (!dateStr) return '';
-      const [year, month, day] = dateStr.split('-');
-      return `${day}.${month}.${year}`;
-    }
+    const loginScreen = document.getElementById('loginScreen');
+    const mainContent = document.getElementById('mainContent');
+    const vendorInput = document.getElementById('vendorCodeLogin');
+    const adminButtons = document.getElementById('adminButtons');
+    const tableBody = document.querySelector("#dataTable tbody");
 
-    function loadFromFirebase() {
-      onValue(ref(db, "tabela"), (snapshot) => {
-        const data = snapshot.val();
-        table.innerHTML = '';
-        for (const key in data) {
-          const rowData = data[key];
-          if (!vendorCode || rowData.vendor === vendorCode || vendorCode === "atlas2025") {
-            const row = table.insertRow();
-            const values = [
-              rowData.purchasingDocument,
-              rowData.item,
-              rowData.material,
-              rowData.description,
-              rowData.documentDate,
-              rowData.vendor,
-              rowData.vendorName,
-              rowData.orderQtyToBeDelivered,
-              rowData.requestedShipDate
-            ];
-            for (let i = 0; i < values.length; i++) {
-              const cell = row.insertCell();
-              cell.textContent = values[i] || '';
-            }
-            const inputCell = row.insertCell();
-            const input = document.createElement("input");
-            input.type = "date";
-            input.value = rowData.lastPromiseDeliveryDate || '';
-            input.addEventListener("change", () => {
-              update(ref(db, "tabela/" + key), {
-                lastPromiseDeliveryDate: input.value
-              });
-            });
-            inputCell.appendChild(input);
-          }
-        }
+    let currentVendor = "";
+
+    // Função para mostrar tabela filtrada e editável
+    function loadTable() {
+      tableBody.innerHTML = '';
+
+      // Filtra dados pelo vendor
+      const filtered = tabelaDados.filter(row =>
+        currentVendor === "atlas2025" || row.vendor === currentVendor
+      );
+
+      filtered.forEach((row, i) => {
+        const tr = document.createElement('tr');
+
+        // Colunas estáticas
+        ['purchasingDocument', 'item', 'material', 'description', 'documentDate', 'vendor', 'vendorName', 'orderQtyToBeDelivered', 'requestedShipDate'].forEach(key => {
+          const td = document.createElement('td');
+          td.textContent = row[key] || '';
+          tr.appendChild(td);
+        });
+
+        // Última coluna: input date editável para lastPromiseDeliveryDate
+        const tdInput = document.createElement('td');
+        const inputDate = document.createElement('input');
+        inputDate.type = 'date';
+        inputDate.value = row.lastPromiseDeliveryDate || '';
+        inputDate.onchange = () => {
+          tabelaDados.find(r => r === row).lastPromiseDeliveryDate = inputDate.value;
+        };
+        tdInput.appendChild(inputDate);
+        tr.appendChild(tdInput);
+
+        tableBody.appendChild(tr);
       });
     }
 
-    window.enterSystem = function () {
-      vendorCode = document.getElementById("vendorCodeLogin").value.trim();
-      if (!vendorCode) return;
+    function enterSystem() {
+      const code = vendorInput.value.trim();
+      if (!code) {
+        alert('Por favor, digite um código do Vendor.');
+        return;
+      }
 
-      get(ref(db, 'tabela')).then(snapshot => {
-        const data = snapshot.val();
-        const values = Object.values(data || {});
-        const vendorExists = vendorCode === "atlas2025" || values.some(row => row.vendor === vendorCode);
+      // Verifica se existe o vendor no JSON (ou admin)
+      const exists = tabelaDados.some(row => row.vendor === code) || code === "atlas2025";
 
-        if (!vendorExists) {
-          alert("Código inválido. Tente novamente.");
-          return;
-        }
+      if (!exists) {
+        alert('Código inválido. Tente novamente.');
+        return;
+      }
 
-        document.getElementById("loginScreen").style.display = "none";
-        document.getElementById("mainContent").style.display = "block";
-        adminButtons.style.display = vendorCode === "atlas2025" ? "block" : "none";
+      currentVendor = code;
+      loginScreen.style.display = 'none';
+      mainContent.style.display = 'block';
 
-        loadFromFirebase();
-      });
-    };
+      adminButtons.style.display = (code === "atlas2025") ? "block" : "none";
 
-    window.backToLogin = function () {
-      document.getElementById("mainContent").style.display = "none";
-      document.getElementById("loginScreen").style.display = "block";
-      document.getElementById("vendorCodeLogin").value = "";
-      table.innerHTML = "";
-    };
+      loadTable();
+    }
 
-    window.handleFile = function (e) {
-      const file = e.target.files[0];
+    function backToLogin() {
+      currentVendor = "";
+      vendorInput.value = '';
+      loginScreen.style.display = 'block';
+      mainContent.style.display = 'none';
+      tableBody.innerHTML = '';
+    }
+
+    // Importar arquivo Excel para atualizar dados da tabela (apenas admin)
+    document.getElementById('inputExcel').addEventListener('change', (event) => {
+      if (currentVendor !== 'atlas2025') return alert('Apenas admin pode importar.');
+
+      const file = event.target.files[0];
       const reader = new FileReader();
-      reader.onload = function (e) {
-        const data = new Uint8Array(e.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-        const updates = {};
+      reader.onload = (e) => {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, {type: 'array'});
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(sheet, {header: 1});
+
+        // json[0] é o cabeçalho
+        const header = json[0].map(h => h.toLowerCase().replace(/ /g, ''));
+
+        // Mapear índice das colunas baseado no header esperado:
+        // purchasingdocument, item, material, description, documentdate, vendor, vendorname, orderqtytobedelivered, requestedshipdate, lastpromisedeliverydate
+        const idxMap = {
+          purchasingDocument: header.indexOf('purchasingdocument'),
+          item: header.indexOf('item'),
+          material: header.indexOf('material'),
+          description: header.indexOf('description'),
+          documentDate: header.indexOf('documentdate'),
+          vendor: header.indexOf('vendor'),
+          vendorName: header.indexOf('vendorname'),
+          orderQtyToBeDelivered: header.indexOf('orderqtytobedelivered'),
+          requestedShipDate: header.indexOf('requestedshipdate'),
+          lastPromiseDeliveryDate: header.indexOf('lastpromisedeliverydate')
+        };
+
+        // Atualiza tabelaDados com os dados do Excel
+        const newDados = [];
         for (let i = 1; i < json.length; i++) {
           const row = json[i];
-          const key = getRowKey(row);
-          updates[key] = {
-            purchasingDocument: row[0] || '',
-            item: row[1] || '',
-            material: row[2] || '',
-            description: row[3] || '',
-            documentDate: formatExcelDate(row[4]),
-            vendor: row[5] || '',
-            vendorName: row[6] || '',
-            orderQtyToBeDelivered: row[7] || '',
-            requestedShipDate: formatExcelDate(row[8]),
-            lastPromiseDeliveryDate: formatExcelDate(row[9])
-          };
-        }
-        set(ref(db, "tabela"), updates).then(() => loadFromFirebase());
-      };
-      reader.readAsArrayBuffer(file);
-    };
+          if (!row.length) continue;
 
-    window.exportToExcel = function () {
-      const wb = XLSX.utils.book_new();
-      const rows = [[...document.querySelectorAll("thead th")].map(th => th.textContent)];
-      for (const tr of document.querySelectorAll("tbody tr")) {
-        const row = [];
-        for (let i = 0; i < 9; i++) {
-          row.push(tr.cells[i].textContent);
+          newDados.push({
+            purchasingDocument: row[idxMap.purchasingDocument] || '',
+            item: row[idxMap.item] || '',
+            material: row[idxMap.material] || '',
+            description: row[idxMap.description] || '',
+            documentDate: formatDate(row[idxMap.documentDate]),
+            vendor: row[idxMap.vendor] || '',
+            vendorName: row[idxMap.vendorName] || '',
+            orderQtyToBeDelivered: row[idxMap.orderQtyToBeDelivered] || '',
+            requestedShipDate: formatDate(row[idxMap.requestedShipDate]),
+            lastPromiseDeliveryDate: formatDate(row[idxMap.lastPromiseDeliveryDate])
+          });
         }
-        const dateValue = tr.cells[9].querySelector("input").value;
-        row.push(formatExportDate(dateValue));
-        rows.push(row);
-      }
-      const ws = XLSX.utils.aoa_to_sheet(rows);
+        tabelaDados = newDados;
+        loadTable();
+        alert('Importação concluída!');
+      };
+
+      reader.readAsArrayBuffer(file);
+    });
+
+    // Exportar tabela para Excel
+    function exportToExcel() {
+      if (currentVendor !== 'atlas2025') return alert('Apenas admin pode exportar.');
+
+      const headers = ["Purchasing Document", "Item", "Material", "Description", "Document Date", "Vendor", "Vendor Name", "Order Qty To Be Delivered", "Requested Ship Date", "Last Promise Delivery Date"];
+      const rows = tabelaDados.map(r => [
+        r.purchasingDocument,
+        r.item,
+        r.material,
+        r.description,
+        r.documentDate,
+        r.vendor,
+        r.vendorName,
+        r.orderQtyToBeDelivered,
+        r.requestedShipDate,
+        r.lastPromiseDeliveryDate
+      ]);
+      const data = [headers, ...rows];
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(data);
       XLSX.utils.book_append_sheet(wb, ws, "Dados");
       XLSX.writeFile(wb, "tabela.xlsx");
-    };
+    }
+
+    // Normalizar datas do Excel para yyyy-mm-dd (se possível)
+    function formatDate(value) {
+      if (!value) return '';
+      if (typeof value === 'number') {
+        const date = new Date((value - 25569) * 86400 * 1000);
+        if (isNaN(date)) return '';
+        return date.toISOString().split('T')[0];
+      }
+      if (typeof value === 'string') {
+        // tenta converter formatos comuns para yyyy-mm-dd
+        const d = new Date(value);
+        if (!isNaN(d)) return d.toISOString().split('T')[0];
+        return value;
+      }
+      return '';
+    }
   </script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <script>
+    window.enterSystem = enterSystem;
+    window.backToLogin = backToLogin;
+    window.exportToExcel = exportToExcel;
+  </script>
+
 </body>
+
 </html>
